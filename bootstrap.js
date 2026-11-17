@@ -1,0 +1,77 @@
+(()=>{
+  const APP_URL='./app.js?v=15.4.17-20261117-data-cleanup';
+  const DATA_URLS=['./players.json?v=15.4.17-20261117-data-cleanup','./data/players.json?v=15.4.17-20261117-data-cleanup'];
+
+  const showError=(msg)=>{
+    const el=document.getElementById('app-loading');
+    if(el){
+      el.textContent=msg;
+      el.style.background='#4a1520';
+    }
+    console.error(msg);
+  };
+
+  async function loadPlayers(){
+    let lastError=null;
+    for(const url of DATA_URLS){
+      try{
+        const r=await fetch(url,{cache:'no-cache'});
+        if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+        const data=await r.json();
+        if(!Array.isArray(data)) throw new Error(`${url}: 선수 데이터 형식 오류`);
+        data.forEach(p=>{if(String(p?.type||'').trim()==='임팩트')p.receivesAllYearEffects=true;});
+        return data;
+      }catch(err){
+        lastError=err;
+        console.warn('선수 데이터 로드 실패:',err);
+      }
+    }
+    throw lastError || new Error('선수 데이터 로드 실패');
+  }
+
+  loadPlayers()
+    .then(data=>{
+      window.__KBO_PLAYERS__=data;
+      const startApp=()=>{
+        const script=document.createElement('script');
+        script.src=APP_URL;
+        script.onerror=()=>showError('앱 스크립트를 불러오지 못했습니다. app.js가 저장소 최상위에 있는지 확인해 주세요.');
+        script.onload=()=>{
+          const positionChoicePatch=document.createElement('script');
+          positionChoicePatch.src='./position-training-choice-runtime-patch.js?v=15.2';
+          positionChoicePatch.onerror=()=>console.warn('포지션 특훈 선택 패치를 불러오지 못했습니다.');
+          document.body.appendChild(positionChoicePatch);
+          const importMobilePatch=document.createElement('script');
+          importMobilePatch.src='./lineup-import-mobile-runtime-patch.js?v=15.4.17-20261117-data-cleanup';
+          importMobilePatch.onerror=()=>console.warn('라인업 가져오기/모바일 화면 패치를 불러오지 못했습니다.');
+          document.body.appendChild(importMobilePatch);
+          const skillStatPatch=document.createElement('script');
+          skillStatPatch.src='./skill-stat-runtime-patch.js?v=14.2';
+          skillStatPatch.onerror=()=>console.warn('스킬 능력치 미반영 패치를 불러오지 못했습니다.');
+          document.body.appendChild(skillStatPatch);
+
+          const logoPatch=document.createElement('script');
+          logoPatch.src='./historic-logo-transparent.js?v=15.4.17-20261117-data-cleanup';
+          logoPatch.onerror=()=>console.warn('옛 구단 로고 투명 배경 패치를 불러오지 못했습니다.');
+          document.body.appendChild(logoPatch);
+
+          const photoPatch=document.createElement('script');
+          photoPatch.src='./player-photo-runtime-patch.js?v=14.0';
+          photoPatch.onerror=()=>console.warn('선수사진 런타임 패치를 불러오지 못했습니다.');
+          document.body.appendChild(photoPatch);
+
+          const handednessPatch=document.createElement('script');
+          handednessPatch.src='./player-handedness-runtime-patch.js?v=14.10';
+          handednessPatch.onerror=()=>console.warn('선수 투구손 수정 패치를 불러오지 못했습니다.');
+          document.body.appendChild(handednessPatch);
+        };
+        document.body.appendChild(script);
+      };
+      const loader=document.createElement('script');
+      loader.src='./player-photo-loader.js?v=14.0';
+      loader.onload=startApp;
+      loader.onerror=()=>{console.warn('선수사진 로더를 불러오지 못했습니다.');startApp();};
+      document.head.appendChild(loader);
+    })
+    .catch(err=>showError('선수 데이터를 불러오지 못했습니다. players.json 또는 data/players.json 파일을 확인해 주세요. ('+err.message+')'));
+})();
